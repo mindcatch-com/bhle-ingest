@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE tiles-definitions PUBLIC
+       "-//Apache Software Foundation//DTD Tiles Configuration 2.0//EN"
+       "http://tiles.apache.org/dtds/tiles-config_2_0.dtd">
+<tiles-definitions>
+	<definition name="base.definition" template="/WEB-INF/jsp/layout.jsp">
+		<put-attribute name="title" value="" />
+		<put-attribute name="header" value="/WEB-INF/jsp/header.jsp" />
+		<put-attribute name="menu" value="/WEB-INF/jsp/menu.jsp" />
+		<put-attribute name="body" value="" />
+		<put-attribute name="footer" value="/WEB-INF/jsp/footer.jsp" />
+		<put-attribute name="scripts" value="/WEB-INF/jsp/scripts.jsp" />
+	</definition>
+
+	<definition name="filebrowser/index" extends="base.definition">
+		<put-attribute name="title" value="PreIngest - File Browser" />
+		<put-attribute name="body"
+			value="/WEB-INF/views/filebrowser/index.jsp" />
+	</definition>
+
+	<definition name="packages/index" extends="base.definition">
+		<put-attribute name="title" value="PreIngest - Packaging" />
+		<put-attribute name="body" value="/WEB-INF/views/packages/index.jsp" />
+	</definition>
+
+	<definition name="packages/monitor" extends="base.definition">
+		<put-attribute name="title" value="PreIngest - Monitoring" />
+		<put-attribute name="body" value="/WEB-INF/views/packages/monitor.jsp" />
+	</definition>
+	
+	<definition name="packages/queue" extends="base.definition">
+		<put-attribute name="title" value="PreIngest - Queue" />
+		<put-attribute name="body" value="/WEB-INF/views/packages/queue.jsp" />
+	</definition>
+	
+	<definition name="guidelines" extends="base.definition">
+		<put-attribute name="title" value="PreIngest - Queue" />
+		<put-attribute name="body" value="/WEB-INF/views/guidelines.jsp" />
+	</definition>
+
+</tiles-definitions>

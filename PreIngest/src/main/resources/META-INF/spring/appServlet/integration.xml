@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:si="http://www.springframework.org/schema/integration"
+	xmlns:int-jmx="http://www.springframework.org/schema/integration/jmx"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xsi:schemaLocation="
+		http://www.springframework.org/schema/beans 
+		http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+		http://www.springframework.org/schema/task 
+		http://www.springframework.org/schema/task/spring-task-3.0.xsd
+        http://www.springframework.org/schema/integration 
+        http://www.springframework.org/schema/integration/spring-integration-2.0.xsd
+        http://www.springframework.org/schema/integration/jmx 
+        http://www.springframework.org/schema/integration/jmx/spring-integration-jmx.xsd
+        ">
+        
+    <!-- Logging & co  -->
+	<si:logging-channel-adapter id="si_logger"
+		level="INFO" expression="headers" />
+
+	<si:poller id="poller" default="true" fixed-rate="30"
+		receive-timeout="30000" />
+	<!-- - - - - -  -->
+
+	<!-- Necessary to use Annotations such as @Publisher, @ServiceActivator -->
+	<si:annotation-config default-publisher-channel="default" />
+	<si:channel id="default" />
+
+	<si:gateway id="loading"
+		service-interface="at.co.ait.domain.integration.ILoadingGateway"
+		default-request-channel="loading_ramp" />
+
+	<si:channel id="loading_ramp">
+		<si:queue />
+		<si:interceptors>
+			<si:wire-tap channel="processing_queue" />
+		</si:interceptors>
+	</si:channel>
+
+	<bean id="loading_file" class="at.co.ait.domain.services.PreparePackageService" />
+
+	<si:service-activator input-channel="loading_ramp" output-channel="pdfpreprocess"
+			expression="@loading_file.prepare(payload,headers.PREFERENCES)" />
+			
+	<!-- Extract TIF / OCR from PDF -->
+	<bean id="pdfbox_service" class="at.co.ait.domain.services.PDFBoxShellService" />
+	<si:chain input-channel="pdfpreprocess" output-channel="techmetadata">
+		<si:service-activator method="extract" ref="pdfbox_service" />
+		<si:splitter method="filter">
+			<bean class="at.co.ait.domain.integration.DigitalObjectSplitter" />
+		</si:splitter>
+	</si:chain>
+
+	<si:channel id="techmetadata">
+		<si:queue />
+	</si:channel>
+
+	<!-- Extract technical metadata from DigitalObject -->
+	<bean id="jhove" class="at.co.ait.domain.services.JHOVE1Service" />
+	<si:service-activator input-channel="techmetadata"
+		output-channel="deep_scan_object" method="enrich" ref="jhove" />
+
+	<!-- Extract DigitalObjectType from DigitalObject -->
+	<!-- TODO: Extract metadatatype by investigating files, extract language for OCR at the same time -->
+	<si:service-activator input-channel="deep_scan_object"
+		output-channel="route" method="enrich" ref="tika" />
+	<bean id="tika" class="at.co.ait.domain.services.TikaService" />
+
+	<!-- Router decides what to do with IMAGE(2), METADATA(3), INFORMATIONPACKAGE(1), PDF(4), -->
+	<!-- UNKNOWN(5), DIGITALOBJECT(6) -->
+	<!--  FIXME: change to header-router and put the DigitalObjectTypes into message header -->
+	<si:router id="objectrouter" input-channel="route"
+		expression="payload.getObjecttypeIdx()">
+		<si:mapping value="1" channel="boxing" />
+		<si:mapping value="2" channel="converting" />
+		<si:mapping value="3" channel="mapping" />
+		<si:mapping value="4" channel="taxonfinder" /><!-- pdfbox moved to start  -->
+		<si:mapping value="5" channel="boxing" />
+	</si:router>
+
+
+	<!-- Invoke Imagemagick to process / convert images -->
+	<si:service-activator input-channel="converting"
+		output-channel="ocr" method="convert" ref="conversion_service" />
+	<bean id="conversion_service" class="at.co.ait.domain.services.ConvertImageService" />
+	
+	<!-- FIXME: test invoking OCR on 4 threads -->
+	<task:executor id="pool" pool-size="4"/>
+	<si:channel id="ocr">
+		<si:dispatcher task-executor="pool" />	
+	</si:channel>
+
+	<!-- Invoke Tesseract 3 to generate dirty OCR -->
+	<si:service-activator input-channel="ocr"
+		output-channel="taxonfinder" expression="@ocr_service.scan(payload,headers.OPTIONS.lang)" />
+	<bean id="ocr_service" class="at.co.ait.domain.services.OCRService" />
+
+	<!-- Send OCR to taxon finder to identify taxa -->
+	<si:service-activator input-channel="taxonfinder"
+		output-channel="boxing" method="enrich" ref="taxonfinder_service" />
+	<bean id="taxonfinder_service" class="at.co.ait.domain.services.TaxonFinderService" />
+
+	<!-- Mapping of metadata using Schema Mapping Tool (SMT) -->
+	<si:service-activator input-channel="mapping"
+		output-channel="boxing" expression="@mapping_service.map(payload,payload.prefs.smtparams)" />
+	<bean id="mapping_service" class="at.co.ait.domain.services.SMTService" />
+
+	<!-- DigitalObjects are boxed together into one package, output is an InformationPackageObject (AIP) -->
+	<bean id="aggregator" class="at.co.ait.domain.services.DeliveryService" />
+	<si:aggregator input-channel="boxing" ref="aggregator"
+		method="prepareDelivery" output-channel="label_service" />
+
+	<!-- Add additional information to AIP, such as external id -->
+	<bean id="label" class="at.co.ait.domain.services.LabellingService" />
+	<si:service-activator input-channel="label_service" output-channel="deliveries"
+		expression="@label.enrich(payload,headers.PREFERENCES.basedirectory)" />		
+
+	<si:channel id="boxing">
+		<si:queue />
+	</si:channel>
+
+	<!-- Scan all files for viruses -->
+	<bean id="virusscan_service" class="at.co.ait.domain.services.VirusscanService" />
+	<si:service-activator input-channel="deliveries"
+		output-channel="nfo_rdf" expression="@virusscan_service.scan(payload)">
+	</si:service-activator>
+
+	<!-- Generate Nepomuk File Ontology RDF/XML description of SIP -->
+	<bean id="aperture_service" class="at.co.ait.domain.services.ApertureService" />
+	<si:service-activator input-channel="nfo_rdf"
+		output-channel="permid_service" expression="@aperture_service.process(payload)">
+	</si:service-activator>
+
+	<!-- Send request to NOID webservice to retrieve a minted identifier -->
+	<bean id="noid_service" class="at.co.ait.domain.services.NoidService" />
+	<si:service-activator input-channel="permid_service"
+		output-channel="packaging_service" expression="@noid_service.enrich(payload)">
+	</si:service-activator>
+
+	<!-- Creation of FedoraMETS1.1 of AIP -->
+	<bean id="mets_marshaller" class="at.co.ait.domain.services.FedoraMetsMarshallerService" />
+	<si:service-activator input-channel="packaging_service"
+		output-channel="create_aip" expression="@mets_marshaller.marshal(payload,headers.PREFERENCES)" />
+
+	<!-- Wrap up of AIP, finishing, cleaning -->
+	<bean id="wrapup_service" class="at.co.ait.domain.services.WrapUpService" />
+	<bean id="archivingqueue" class="at.co.ait.domain.integration.ArchivingQueue" />
+	<si:service-activator input-channel="create_aip" output-channel="processing_queue"
+		expression="@wrapup_service.wrapup(payload)" />
+
+	<!-- Push AIP through to remove it from Queue (indicate processing finished) -->
+	<bean id="packagequeue" class="at.co.ait.domain.integration.ProcessingQueue" />
+	<si:service-activator input-channel="processing_queue" output-channel="nullChannel"
+		expression="@packagequeue.handle(payload, headers.PREFERENCES.username)" />
+
+</beans>

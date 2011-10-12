@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-http="http://www.springframework.org/schema/integration/http"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration-2.0.xsd
+		http://www.springframework.org/schema/integration/http http://www.springframework.org/schema/integration/http/spring-integration-http-2.0.xsd">
+
+	<int:gateway id="noidRequestGateway"
+		service-interface="at.co.ait.domain.integration.IReqNoidGateway"
+		default-request-channel="noidRequestChannel" />
+
+	<int:channel id="noidRequestChannel" />
+
+	<int-http:outbound-gateway request-channel="noidRequestChannel"
+		url="http://localhost:3000/mint" http-method="GET" request-timeout="1000"
+		expected-response-type="java.lang.String" />
+
+	<int:gateway id="taxonfinderGateway"
+		service-interface="at.co.ait.domain.integration.ITaxonFinderGateway"
+		default-request-channel="taxon_finder_request" />
+
+	<int:channel id="taxon_finder_request" />
+
+	<int-http:outbound-gateway request-channel="taxon_finder_request" url="http://localhost:4567/find?input={input}"
+		http-method="GET" request-timeout="10000" expected-response-type="java.lang.String">
+		<int-http:uri-variable name="input" expression="payload"/>
+	</int-http:outbound-gateway>
+
+</beans>

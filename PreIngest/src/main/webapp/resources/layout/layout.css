@@ -1,0 +1,21 @@
+body {
+    margin: auto; /* center in viewport */
+    width: 960px;
+}
+
+p.first-of-type {
+	margin-top: .5em;
+}
+
+h1.heading {
+	background-color:#ccff99;
+	font-style:italic;
+}
+
+.yui3-loading #menu {
+	display: none;
+}
+
+#contenttabs div div * ul li {
+	list-style: none;
+}

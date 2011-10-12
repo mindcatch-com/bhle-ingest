@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans:beans xmlns="http://www.springframework.org/schema/mvc"
+	xmlns:security="http://www.springframework.org/schema/security"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:beans="http://www.springframework.org/schema/beans"
+	xsi:schemaLocation="
+        http://www.springframework.org/schema/mvc 
+        http://www.springframework.org/schema/mvc/spring-mvc-3.0.xsd
+        http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+        
+    <beans:bean id="settings" class="at.co.ait.web.common.Settings" />
+
+    <beans:bean id="xstreamMarshaller" class="org.springframework.oxm.xstream.XStreamMarshaller">
+    </beans:bean>
+    
+    <beans:bean id="config" class="at.co.ait.web.common.ConfigSerializer">
+    	<beans:property name="settings" ref="settings" />
+        <beans:property name="marshaller" ref="xstreamMarshaller" />
+        <beans:property name="unmarshaller" ref="xstreamMarshaller" />
+        <beans:property name="fileResource" value="classpath:/META-INF/settings.xml" />
+    </beans:bean>
+    
+</beans:beans>

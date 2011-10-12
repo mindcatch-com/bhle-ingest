@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+	
+	<!-- Root Context: defines shared resources visible to all other web components -->
+
+    <bean id="xstreamMarshaller" class="org.springframework.oxm.xstream.XStreamMarshaller" />
+    
+    <bean id="settings" class="at.co.ait.web.common.Settings" />
+    
+    <bean id="config" class="at.co.ait.web.common.ConfigSerializer">
+    	<property name="settings" ref="settings" />
+        <property name="marshaller" ref="xstreamMarshaller" />
+        <property name="unmarshaller" ref="xstreamMarshaller" />
+        <property name="fileResource" value="classpath:/META-INF/settings.xml" />
+    </bean>
+      		
+	<!-- Imports specific spring security settings -->
+	<import resource="security.xml" />
+	    
+</beans>
